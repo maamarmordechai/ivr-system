@@ -1,0 +1,2 @@
+## Pages
+- [מערכת ניהול אכסניות - Accommodation Management](/): Complete accommodation management portal for managing apartments, guests, and assignments
