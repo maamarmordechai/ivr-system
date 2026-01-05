@@ -118,7 +118,6 @@ export default function IVRFlowBuilderTab() {
     const { data } = await supabase
       .from('voicemail_boxes')
       .select('*')
-      .eq('is_active', true)
       .order('box_number');
     setVoicemailBoxes(data || []);
   };

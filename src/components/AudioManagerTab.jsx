@@ -64,6 +64,30 @@ export default function AudioManagerTab() {
         .select('*')
         .order('created_at', { ascending: false });
 
+      // Fetch IVR Menu audio (from ivr_menus_v2)
+      const { data: ivrMenuData } = await supabase
+        .from('ivr_menus_v2')
+        .select('id, menu_name, menu_key, prompt_audio_url, created_at')
+        .not('prompt_audio_url', 'is', null);
+
+      // Fetch bed audio settings
+      const { data: bedAudioData } = await supabase
+        .from('bed_audio_settings')
+        .select('*')
+        .not('audio_url', 'is', null);
+
+      // Fetch meal audio settings
+      const { data: mealAudioData } = await supabase
+        .from('meal_audio_settings')
+        .select('*')
+        .not('audio_url', 'is', null);
+
+      // Fetch call settings audio
+      const { data: callSettingsData } = await supabase
+        .from('call_settings')
+        .select('*')
+        .single();
+
       // Combine all audio sources
       const allAudio = [];
 
@@ -108,6 +132,84 @@ export default function AudioManagerTab() {
             displayName: p.prompt_name,
             displayCategory: 'ivr'
           });
+        });
+      }
+
+      // Add IVR Menu audio
+      if (ivrMenuData) {
+        ivrMenuData.forEach(menu => {
+          allAudio.push({
+            id: `menu-${menu.id}`,
+            name: `IVR Menu: ${menu.menu_name}`,
+            description: `Menu key: ${menu.menu_key}`,
+            category: 'ivr',
+            file_url: menu.prompt_audio_url,
+            created_at: menu.created_at,
+            source: 'ivr_menu',
+            displayName: menu.menu_name,
+            displayCategory: 'ivr'
+          });
+        });
+      }
+
+      // Add bed audio
+      if (bedAudioData) {
+        bedAudioData.forEach(audio => {
+          allAudio.push({
+            id: `bed-${audio.id}`,
+            name: `Bed Audio: ${audio.audio_key}`,
+            description: audio.description || 'Bed system audio',
+            category: 'beds',
+            file_url: audio.audio_url,
+            created_at: audio.created_at,
+            source: 'bed_audio',
+            displayName: audio.audio_key,
+            displayCategory: 'beds'
+          });
+        });
+      }
+
+      // Add meal audio
+      if (mealAudioData) {
+        mealAudioData.forEach(audio => {
+          allAudio.push({
+            id: `meal-${audio.id}`,
+            name: `Meal Audio: ${audio.audio_key}`,
+            description: audio.description || 'Meal system audio',
+            category: 'meals',
+            file_url: audio.audio_url,
+            created_at: audio.created_at,
+            source: 'meal_audio',
+            displayName: audio.audio_key,
+            displayCategory: 'meals'
+          });
+        });
+      }
+
+      // Add call settings audio
+      if (callSettingsData) {
+        const audioFields = [
+          { key: 'welcome_audio_url', name: 'Welcome Message' },
+          { key: 'beds_audio_url', name: 'Beds Question' },
+          { key: 'couple_audio_url', name: 'Couple Question' },
+          { key: 'two_couples_audio_url', name: 'Two Couples Question' },
+          { key: 'mix_audio_url', name: 'Mix Question' },
+          { key: 'crib_audio_url', name: 'Crib Question' }
+        ];
+        audioFields.forEach(field => {
+          if (callSettingsData[field.key]) {
+            allAudio.push({
+              id: `call-${field.key}`,
+              name: `Call Setting: ${field.name}`,
+              description: 'System call audio',
+              category: 'system',
+              file_url: callSettingsData[field.key],
+              created_at: callSettingsData.updated_at,
+              source: 'call_settings',
+              displayName: field.name,
+              displayCategory: 'system'
+            });
+          }
         });
       }
 
