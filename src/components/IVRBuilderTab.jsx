@@ -153,9 +153,12 @@ export default function IVRBuilderTab() {
   const fetchVoicemailBoxes = async () => {
     const { data } = await supabase
       .from('voicemail_boxes')
-      .select('*')
-      .order('box_name');
-    setVoicemailBoxes(data || []);
+      .select('*');
+    // Sort numerically by box_number
+    const sorted = (data || []).sort((a, b) => 
+      parseInt(a.box_number) - parseInt(b.box_number)
+    );
+    setVoicemailBoxes(sorted);
   };
 
   const fetchAvailableFunctions = async () => {

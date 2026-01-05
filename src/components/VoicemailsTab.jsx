@@ -18,7 +18,7 @@ const VoicemailsTab = () => {
   const [editingBoxName, setEditingBoxName] = useState('');
   const [editingLabelId, setEditingLabelId] = useState(null);
   const [editingLabel, setEditingLabel] = useState('');
-  const [showBoxManager, setShowBoxManager] = useState(false);
+  const [showBoxManager, setShowBoxManager] = useState(true);
   const [showNewBoxForm, setShowNewBoxForm] = useState(false);
   const [newBoxForm, setNewBoxForm] = useState({
     box_number: '',
@@ -38,21 +38,27 @@ const VoicemailsTab = () => {
       // Fetch ALL voicemail boxes (including inactive)
       const { data: allBoxesData, error: allBoxesError } = await supabase
         .from('voicemail_boxes')
-        .select('*')
-        .order('box_number');
+        .select('*');
 
       if (allBoxesError) throw allBoxesError;
-      setAllBoxes(allBoxesData || []);
+      // Sort numerically by box_number
+      const sortedAllBoxes = (allBoxesData || []).sort((a, b) => 
+        parseInt(a.box_number) - parseInt(b.box_number)
+      );
+      setAllBoxes(sortedAllBoxes);
 
       // Fetch active voicemail boxes
       const { data: boxesData, error: boxesError } = await supabase
         .from('voicemail_boxes')
         .select('*')
-        .eq('is_active', true)
-        .order('box_number');
+        .eq('is_active', true);
 
       if (boxesError) throw boxesError;
-      setBoxes(boxesData || []);
+      // Sort numerically by box_number
+      const sortedBoxes = (boxesData || []).sort((a, b) => 
+        parseInt(a.box_number) - parseInt(b.box_number)
+      );
+      setBoxes(sortedBoxes);
 
       // Fetch voicemails
       let query = supabase
