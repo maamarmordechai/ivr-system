@@ -35,11 +35,25 @@ export default function IVRFlowBuilderTab() {
   const [editingStep, setEditingStep] = useState(null);
   const [showNewFlowModal, setShowNewFlowModal] = useState(false);
   const [showNewStepModal, setShowNewStepModal] = useState(false);
+  const [showEditActionModal, setShowEditActionModal] = useState(false);
+  const [editingAction, setEditingAction] = useState(null);
+  const [addingActionToStep, setAddingActionToStep] = useState(null);
   const [playingAudio, setPlayingAudio] = useState(null);
   const [newFlowName, setNewFlowName] = useState('');
   const [viewMode, setViewMode] = useState('diagram'); // 'list' or 'diagram'
   const audioRef = useRef(null);
   const { toast } = useToast();
+
+  const [actionForm, setActionForm] = useState({
+    digit: '1',
+    action_name: '',
+    action_type: 'goto_step',
+    target_step_id: null,
+    voicemail_box_id: null,
+    transfer_number: '',
+    function_name: '',
+    action_audio_text: ''
+  });
 
   const [newStep, setNewStep] = useState({
     step_name: '',
@@ -272,6 +286,119 @@ export default function IVRFlowBuilderTab() {
       if (error) throw error;
 
       fetchSteps(selectedFlow.id);
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message });
+    }
+  };
+
+  // Start editing an action
+  const startEditAction = (action) => {
+    setEditingAction(action);
+    setActionForm({
+      digit: action.digit || '1',
+      action_name: action.action_name || '',
+      action_type: action.action_type || 'goto_step',
+      target_step_id: action.target_step_id || null,
+      voicemail_box_id: action.voicemail_box_id || null,
+      transfer_number: action.transfer_number || '',
+      function_name: action.function_name || '',
+      action_audio_text: action.action_audio_text || ''
+    });
+    setShowEditActionModal(true);
+  };
+
+  // Start adding a new action to a step
+  const startAddAction = (stepId) => {
+    const step = steps.find(s => s.id === stepId);
+    const usedDigits = step?.actions?.map(a => a.digit) || [];
+    const nextDigit = DIGITS.find(d => !usedDigits.includes(d)) || '1';
+    
+    setAddingActionToStep(stepId);
+    setEditingAction(null);
+    setActionForm({
+      digit: nextDigit,
+      action_name: '',
+      action_type: 'goto_step',
+      target_step_id: null,
+      voicemail_box_id: null,
+      transfer_number: '',
+      function_name: '',
+      action_audio_text: ''
+    });
+    setShowEditActionModal(true);
+  };
+
+  // Save action (create or update)
+  const saveAction = async () => {
+    if (!actionForm.digit || !actionForm.action_type) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Digit and action type are required' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (editingAction) {
+        // Update existing action
+        const { error } = await supabase
+          .from('ivr_flow_actions')
+          .update({
+            digit: actionForm.digit,
+            action_name: actionForm.action_name,
+            action_type: actionForm.action_type,
+            target_step_id: actionForm.action_type === 'goto_step' ? actionForm.target_step_id : null,
+            voicemail_box_id: actionForm.action_type === 'voicemail' ? actionForm.voicemail_box_id : null,
+            transfer_number: actionForm.action_type === 'transfer' ? actionForm.transfer_number : null,
+            function_name: actionForm.action_type === 'custom_function' ? actionForm.function_name : null,
+            action_audio_text: actionForm.action_audio_text
+          })
+          .eq('id', editingAction.id);
+
+        if (error) throw error;
+        toast({ title: 'Updated', description: 'Action updated successfully' });
+      } else if (addingActionToStep) {
+        // Create new action
+        const { error } = await supabase
+          .from('ivr_flow_actions')
+          .insert({
+            step_id: addingActionToStep,
+            digit: actionForm.digit,
+            action_name: actionForm.action_name,
+            action_type: actionForm.action_type,
+            target_step_id: actionForm.action_type === 'goto_step' ? actionForm.target_step_id : null,
+            voicemail_box_id: actionForm.action_type === 'voicemail' ? actionForm.voicemail_box_id : null,
+            transfer_number: actionForm.action_type === 'transfer' ? actionForm.transfer_number : null,
+            function_name: actionForm.action_type === 'custom_function' ? actionForm.function_name : null,
+            action_audio_text: actionForm.action_audio_text
+          });
+
+        if (error) throw error;
+        toast({ title: 'Created', description: 'Action added successfully' });
+      }
+
+      setShowEditActionModal(false);
+      setEditingAction(null);
+      setAddingActionToStep(null);
+      fetchSteps(selectedFlow.id);
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message });
+    }
+    setSaving(false);
+  };
+
+  // Delete an action
+  const deleteAction = async (actionId) => {
+    if (!confirm('Delete this action?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('ivr_flow_actions')
+        .delete()
+        .eq('id', actionId);
+
+      if (error) throw error;
+
+      fetchSteps(selectedFlow.id);
+      toast({ title: 'Deleted', description: 'Action removed' });
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
     }
@@ -957,6 +1084,27 @@ export default function IVRFlowBuilderTab() {
                                     </div>
                                   </div>
                                 )}
+
+                                {/* Action Edit/Delete Buttons */}
+                                <div className="flex gap-2 mt-3 pt-3 border-t border-slate-100">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => startEditAction(action)}
+                                    className="flex-1"
+                                  >
+                                    <Edit2 className="w-3 h-3 mr-1" />
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => deleteAction(action.id)}
+                                    className="text-red-600 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </div>
                               </div>
                             );
                           })}
@@ -965,6 +1113,16 @@ export default function IVRFlowBuilderTab() {
                               No actions configured for this step
                             </p>
                           )}
+
+                          {/* Add Action Button */}
+                          <Button
+                            variant="outline"
+                            className="w-full mt-3 border-dashed"
+                            onClick={() => startAddAction(step.id)}
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Button Action
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -1270,6 +1428,147 @@ export default function IVRFlowBuilderTab() {
               <Button className="flex-1" onClick={createStep} disabled={saving}>
                 {saving ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : null}
                 Create Step
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit/Add Action Modal */}
+      {showEditActionModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-900">
+                {editingAction ? 'Edit Action' : 'Add New Action'}
+              </h3>
+              <button
+                onClick={() => { setShowEditActionModal(false); setEditingAction(null); setAddingActionToStep(null); }}
+                className="p-2 hover:bg-slate-100 rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Digit */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Digit *</Label>
+                  <select
+                    value={actionForm.digit}
+                    onChange={(e) => setActionForm({ ...actionForm, digit: e.target.value })}
+                    className="w-full p-2 border border-slate-200 rounded-md"
+                  >
+                    {DIGITS.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label>Action Name</Label>
+                  <Input
+                    placeholder="e.g., Leave Message"
+                    value={actionForm.action_name}
+                    onChange={(e) => setActionForm({ ...actionForm, action_name: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Action Type */}
+              <div>
+                <Label>Action Type *</Label>
+                <select
+                  value={actionForm.action_type}
+                  onChange={(e) => setActionForm({ ...actionForm, action_type: e.target.value })}
+                  className="w-full p-2 border border-slate-200 rounded-md"
+                >
+                  {ACTION_TYPES.map(type => (
+                    <option key={type.key} value={type.key}>{type.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Action-specific fields */}
+              {actionForm.action_type === 'goto_step' && (
+                <div>
+                  <Label>Go to Step</Label>
+                  <select
+                    value={actionForm.target_step_id || ''}
+                    onChange={(e) => setActionForm({ ...actionForm, target_step_id: e.target.value || null })}
+                    className="w-full p-2 border border-slate-200 rounded-md"
+                  >
+                    <option value="">Select a step...</option>
+                    {steps.map(s => (
+                      <option key={s.id} value={s.id}>{s.step_name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {actionForm.action_type === 'voicemail' && (
+                <div>
+                  <Label>Voicemail Box</Label>
+                  <select
+                    value={actionForm.voicemail_box_id || ''}
+                    onChange={(e) => setActionForm({ ...actionForm, voicemail_box_id: e.target.value || null })}
+                    className="w-full p-2 border border-slate-200 rounded-md"
+                  >
+                    <option value="">Select a box...</option>
+                    {voicemailBoxes.map(box => (
+                      <option key={box.id} value={box.id}>
+                        {box.box_number} - {box.box_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {actionForm.action_type === 'transfer' && (
+                <div>
+                  <Label>Transfer To (Phone Number)</Label>
+                  <Input
+                    placeholder="+1234567890"
+                    value={actionForm.transfer_number}
+                    onChange={(e) => setActionForm({ ...actionForm, transfer_number: e.target.value })}
+                  />
+                </div>
+              )}
+
+              {actionForm.action_type === 'custom_function' && (
+                <div>
+                  <Label>Function Name</Label>
+                  <Input
+                    placeholder="e.g., check_availability"
+                    value={actionForm.function_name}
+                    onChange={(e) => setActionForm({ ...actionForm, function_name: e.target.value })}
+                  />
+                </div>
+              )}
+
+              {/* Response Audio Text */}
+              <div>
+                <Label>Response Audio Text (TTS)</Label>
+                <Input
+                  placeholder="Text to speak after this action"
+                  value={actionForm.action_audio_text}
+                  onChange={(e) => setActionForm({ ...actionForm, action_audio_text: e.target.value })}
+                />
+                <p className="text-xs text-slate-500 mt-1">Optional: Text spoken to caller after pressing this digit</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-6 pt-4 border-t border-slate-100">
+              <Button 
+                variant="outline" 
+                className="flex-1" 
+                onClick={() => { setShowEditActionModal(false); setEditingAction(null); setAddingActionToStep(null); }}
+              >
+                Cancel
+              </Button>
+              <Button className="flex-1" onClick={saveAction} disabled={saving}>
+                {saving ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : null}
+                {editingAction ? 'Save Changes' : 'Add Action'}
               </Button>
             </div>
           </div>
